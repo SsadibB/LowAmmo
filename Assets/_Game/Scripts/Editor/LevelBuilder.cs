@@ -133,6 +133,14 @@ namespace LowAmmo.Editor
             var hudInstance = (GameObject)PrefabUtility.InstantiatePrefab(hudPrefab);
             hudInstance.name = "HUDCanvas";
 
+            // Force ScreenSpaceOverlay regardless of how the prefab was saved
+            var canvas = hudInstance.GetComponent<Canvas>();
+            if (canvas != null)
+            {
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+                canvas.sortingOrder = 100; // Render on top of all sprites
+            }
+
             // Bottom Pit DeathZone
             var deathPrefab = LoadPrefab("Environment/DeathZone");
             var deathObj = (GameObject)PrefabUtility.InstantiatePrefab(deathPrefab);

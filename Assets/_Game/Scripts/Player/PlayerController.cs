@@ -1,7 +1,5 @@
 using UnityEngine;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-#endif
 
 namespace LowAmmo.Player
 {
@@ -108,26 +106,18 @@ namespace LowAmmo.Player
             bool jumpDown = false;
             bool jumpPressing = false;
 
-#if ENABLE_INPUT_SYSTEM
-            if (Keyboard.current != null)
+            var kb = Keyboard.current;
+            if (kb != null)
             {
-                if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) horiz -= 1f;
-                if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) horiz += 1f;
+                if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) horiz -= 1f;
+                if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) horiz += 1f;
 
-                if (Keyboard.current.spaceKey.wasPressedThisFrame || Keyboard.current.wKey.wasPressedThisFrame || Keyboard.current.upArrowKey.wasPressedThisFrame)
-                {
+                if (kb.spaceKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame)
                     jumpDown = true;
-                }
-                if (Keyboard.current.spaceKey.isPressed || Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed)
-                {
+
+                if (kb.spaceKey.isPressed || kb.wKey.isPressed || kb.upArrowKey.isPressed)
                     jumpPressing = true;
-                }
             }
-#else
-            horiz = Input.GetAxisRaw("Horizontal");
-            jumpDown = Input.GetButtonDown("Jump") || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow);
-            jumpPressing = Input.GetButton("Jump") || Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
-#endif
 
             horizontalInput = horiz;
             if (jumpDown) jumpRequested = true;

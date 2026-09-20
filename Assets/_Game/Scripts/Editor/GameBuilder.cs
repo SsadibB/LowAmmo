@@ -120,6 +120,7 @@ namespace LowAmmo.Editor
             lr.useWorldSpace = true;
             lr.enabled = false;
             lr.material = new Material(Shader.Find("Sprites/Default"));
+            lr.sortingOrder = 20;
             lr.startColor = new Color(1f, 0.95f, 0.4f, 1f);
             lr.endColor = new Color(1f, 0.5f, 0.1f, 0.2f);
             var tracer = tracerObj.AddComponent<BulletTracer>();
@@ -439,6 +440,7 @@ namespace LowAmmo.Editor
             var canvasObj = new GameObject("HUDCanvas");
             var canvas = canvasObj.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 100; // Always on top of all 2D sprites
 
             var scaler = canvasObj.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;

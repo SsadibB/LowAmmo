@@ -1,9 +1,7 @@
 using UnityEngine;
 using LowAmmo.Level;
 using LowAmmo.Puzzle;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-#endif
 
 namespace LowAmmo.Weapon
 {
@@ -16,7 +14,7 @@ namespace LowAmmo.Weapon
 
         [Header("Shooting Settings")]
         [SerializeField] private float maxRange = 60f;
-        [SerializeField] private LayerMask hitLayers = ~0; // Default hit everything
+        [SerializeField] private LayerMask hitLayers = ~0;
 
         [Header("Feedback")]
         [SerializeField] private ParticleSystem muzzleFlashParticles;
@@ -25,18 +23,14 @@ namespace LowAmmo.Weapon
         [SerializeField] private AudioClip dryFireSound;
 
         private Camera mainCam;
+        private int groundLayer;
 
         private void Awake()
         {
             mainCam = Camera.main;
-            if (firePoint == null)
-            {
-                firePoint = transform;
-            }
-            if (gunSpriteRenderer == null)
-            {
-                gunSpriteRenderer = GetComponent<SpriteRenderer>();
-            }
+            groundLayer = LayerMask.NameToLayer("Ground");
+            if (firePoint == null) firePoint = transform;
+            if (gunSpriteRenderer == null) gunSpriteRenderer = GetComponent<SpriteRenderer>();
         }
 
         private void Update()
@@ -44,65 +38,94 @@ namespace LowAmmo.Weapon
             if (mainCam == null)
             {
                 mainCam = Camera.main;
-                if (mainCam == null) return;
             }
 
-            // Aim toward mouse
-            Vector2 mouseScreenPos = Vector2.zero;
-            bool firePressed = false;
-
-#if ENABLE_INPUT_SYSTEM
-            if (Mouse.current != null)
+            if (LevelManager.Instance != null && (LevelManager.Instance.IsGameOver || LevelManager.Instance.IsLevelCompleted))
             {
-                mouseScreenPos = Mouse.current.position.ReadValue();
-                firePressed = Mouse.current.leftButton.wasPressedThisFrame;
+                return;
             }
-#else
-            mouseScreenPos = Input.mousePosition;
-            firePressed = Input.GetMouseButtonDown(0);
-#endif
 
-            Vector3 mouseWorldPos = mainCam.ScreenToWorldPoint(new Vector3(mouseScreenPos.x, mouseScreenPos.y, -mainCam.transform.position.z));
-            mouseWorldPos.z = 0f;
+            Vector2 mouseScreenPos = ReadPointerScreenPosition();
+            bool firePressed = ReadFirePressed();
 
-            Vector2 aimDirection = ((Vector2)mouseWorldPos - (Vector2)transform.position).normalized;
-            if (aimDirection.sqrMagnitude > 0.001f)
+            Vector3 mouseWorldPos = transform.position + Vector3.right;
+            if (mainCam != null)
             {
-                float angle = Mathf.Atan2(aimDirection.y, aimDirection.x) * Mathf.Rad2Deg;
-                transform.rotation = Quaternion.Euler(0f, 0f, angle);
-
-                if (gunSpriteRenderer != null)
-                {
-                    // Flip vertically when aiming to the left so the gun stays right-side up
-                    gunSpriteRenderer.flipY = Mathf.Abs(angle) > 90f;
-                }
+                mouseWorldPos = mainCam.ScreenToWorldPoint(
+                    new Vector3(mouseScreenPos.x, mouseScreenPos.y, Mathf.Abs(mainCam.transform.position.z)));
+                mouseWorldPos.z = 0f;
             }
 
-            // Shoot interaction
+            Vector2 aimDirection = ((Vector2)mouseWorldPos - (Vector2)transform.position);
+            if (aimDirection.sqrMagnitude < 0.0001f)
+            {
+                aimDirection = Vector2.right;
+            }
+            else
+            {
+                aimDirection.Normalize();
+            }
+
+            float angle = Mathf.Atan2(aimDirection.y, aimDirection.x) * Mathf.Rad2Deg;
+            transform.rotation = Quaternion.Euler(0f, 0f, angle);
+
+            if (gunSpriteRenderer != null)
+            {
+                gunSpriteRenderer.flipY = Mathf.Abs(angle) > 90f;
+            }
+
             if (firePressed)
             {
                 AttemptFire(aimDirection);
             }
         }
 
+        // New Input System only. Pointer.current covers both mouse and touch;
+        // the legacy UnityEngine.Input calls were removed because they throw
+        // InvalidOperationException when Active Input Handling is "Input System Package (New)".
+        private static Vector2 ReadPointerScreenPosition()
+        {
+            if (Mouse.current != null)
+                return Mouse.current.position.ReadValue();
+            if (Pointer.current != null)
+                return Pointer.current.position.ReadValue();
+            if (Touchscreen.current != null)
+                return Touchscreen.current.primaryTouch.position.ReadValue();
+            return Vector2.zero;
+        }
+
+        private static bool ReadFirePressed()
+        {
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+                return true;
+
+            if (Pointer.current != null && Pointer.current.press.wasPressedThisFrame)
+                return true;
+
+            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
+                return true;
+
+            return false;
+        }
+
         private void AttemptFire(Vector2 aimDirection)
         {
             if (LevelManager.Instance != null && !LevelManager.Instance.TryConsumeAmmo())
             {
-                // Dry fire feedback (out of ammo)
                 PlayFeedback(dryFireSound);
+                ExecuteFire(aimDirection, consumeSucceeded: false);
                 return;
             }
 
-            ExecuteFire(aimDirection);
+            ExecuteFire(aimDirection, consumeSucceeded: true);
         }
 
-        private void ExecuteFire(Vector2 aimDirection)
+        private void ExecuteFire(Vector2 aimDirection, bool consumeSucceeded)
         {
-            PlayFeedback(shootSound);
-            if (muzzleFlashParticles != null)
+            if (consumeSucceeded)
             {
-                muzzleFlashParticles.Play();
+                PlayFeedback(shootSound);
+                if (muzzleFlashParticles != null) muzzleFlashParticles.Play();
             }
 
             Vector2 origin = firePoint != null ? (Vector2)firePoint.position : (Vector2)transform.position;
@@ -112,49 +135,45 @@ namespace LowAmmo.Weapon
             bool foundHit = false;
             for (int i = 0; i < hits.Length; i++)
             {
-                if (hits[i].collider != null && (hits[i].collider.CompareTag("Player") || hits[i].collider.transform.IsChildOf(transform.root)))
-                {
-                    continue; // Skip player's own body
-                }
-                hit = hits[i];
-                foundHit = true;
-                break;
-            }
+                if (hits[i].collider == null) continue;
+                if (hits[i].collider.CompareTag("Player")) continue;
+                if (hits[i].collider.transform.IsChildOf(transform.root)) continue;
 
-            Vector3 hitPoint;
-            if (foundHit && hit.collider != null)
-            {
-                hitPoint = hit.point;
-
-                // Modular IShootable invocation
-                IShootable shootable = hit.collider.GetComponentInParent<IShootable>();
-                if (shootable == null)
-                {
-                    shootable = hit.collider.GetComponent<IShootable>();
-                }
-
+                IShootable shootable = hits[i].collider.GetComponentInParent<IShootable>()
+                    ?? hits[i].collider.GetComponent<IShootable>();
                 if (shootable != null)
                 {
-                    shootable.OnHit(hit);
+                    hit = hits[i];
+                    foundHit = true;
+                    break;
+                }
+
+                if (hits[i].collider.isTrigger) continue;
+
+                // Crate colliders sit in front of ropes; only solid ground/doors should stop a shot.
+                if (hits[i].collider.gameObject.layer == groundLayer)
+                {
+                    hit = hits[i];
+                    foundHit = true;
+                    break;
                 }
             }
-            else
+
+            Vector3 hitPoint = foundHit && hit.collider != null ? (Vector3)hit.point : origin + aimDirection * maxRange;
+
+            if (consumeSucceeded && foundHit && hit.collider != null)
             {
-                hitPoint = origin + aimDirection * maxRange;
+                IShootable shootable = hit.collider.GetComponentInParent<IShootable>()
+                    ?? hit.collider.GetComponent<IShootable>();
+                if (shootable != null) shootable.OnHit(hit);
             }
 
-            if (bulletTracer != null)
-            {
-                bulletTracer.Show(origin, hitPoint);
-            }
+            if (bulletTracer != null) bulletTracer.Show(origin, hitPoint);
         }
 
         private void PlayFeedback(AudioClip clip)
         {
-            if (audioSource != null && clip != null)
-            {
-                audioSource.PlayOneShot(clip);
-            }
+            if (audioSource != null && clip != null) audioSource.PlayOneShot(clip);
         }
     }
 }

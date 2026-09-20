@@ -1,9 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-#endif
 
 namespace LowAmmo.Level
 {
@@ -47,20 +45,8 @@ namespace LowAmmo.Level
 
         private void Update()
         {
-            // Quick restart key (R)
-            bool restartPressed = false;
-#if ENABLE_INPUT_SYSTEM
-            if (Keyboard.current != null && Keyboard.current.rKey.wasPressedThisFrame)
-            {
-                restartPressed = true;
-            }
-#else
-            if (Input.GetKeyDown(KeyCode.R))
-            {
-                restartPressed = true;
-            }
-#endif
-            if (restartPressed)
+            var kb = Keyboard.current;
+            if (kb != null && kb.rKey.wasPressedThisFrame)
             {
                 RestartLevel();
             }
